@@ -1,3 +1,3 @@
 # groupmeGPT
 
-testin1234567
+Groupme Chatbot V2
