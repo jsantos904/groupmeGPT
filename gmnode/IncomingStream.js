@@ -22,11 +22,10 @@ const STATE_CONNECTED = "connected";
 
 class IncomingStream extends EventEmitter {
     // Constructor initializes the WebSocket client and sets the initial state
-    constructor(access_token, userid, groupids) {
+    constructor(access_token, userid) {
         super();
         this.access_token = access_token;
         this.userid = userid;
-        this.groupids = groupids;
 
         this.client = new WebSocketClient();
         this.connection = null;
@@ -105,28 +104,12 @@ class IncomingStream extends EventEmitter {
     subscribeResponse(data) {
         if (data["successful"]) {
             this.startListening();
-            if (data["subscription"] === '/user/' + this.userid && this.groupids) {
+            if (data["subscription"] === '/user/' + this.userid) {
                 this.subscribeGroups();
             }
         } else {
-            this.emit('error', 'Subscribing to user or group failed!');
+            this.emit('error', 'Subscribing to user failed!');
         }
-    }
-
-    // Subscribes to group updates
-    subscribeGroups() {
-        this.groupids.forEach(groupid => {
-            const data = {
-                channel: '/meta/subscribe',
-                clientId: this.clientId,
-                subscription: '/group/' + groupid,
-                ext: {
-                    access_token: this.access_token,
-                    timestamp: Date.now()
-                }
-            };
-            this.send([data]);
-        });
     }
 
     // Starts listening for messages
@@ -163,7 +146,6 @@ class IncomingStream extends EventEmitter {
             this.emit('error', 'Error sending message:', error);
         }
     }
-
 
     // Handles the connection to the WebSocket server
     handleConnection(connection) {
@@ -216,16 +198,12 @@ class IncomingStream extends EventEmitter {
                         this.handshakeResponse(data);
                     } else if (data["channel"] === "/meta/subscribe") {
                         this.subscribeResponse(data);
-                    } else if (data["error"] && data["error"] === "ClientID_Expired") { // Check for client ID expiration
-                        this.emit('error', 'ClientID expired. Initiating new handshake.');
+                    } else if (data["error"] && data["error"].startsWith("401:")) { // Check for client ID expiration
+                        this.emit('error', 'ClientID expired or unknown. Initiating new handshake.');
                         this.handshake();
                     } else {
-                        // Handle other messages, possibly with groupId
-                        if (data.groupId) { // Check if the message has a groupId field
-                            this.emit('groupMessage', data.groupId, data);
-                        } else {
-                            this.emit('message', data);
-                        }
+                        // emit the data
+                        this.emit('message', data);
                     }
                 });
             } else {
